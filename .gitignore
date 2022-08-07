@@ -1,0 +1,14 @@
+/.venv
+/.kaggle_venv
+/0_kaggle
+/_backup
+/_log
+*.vertical_inputs
+*.units
+*.layers
+*.optimize_fn
+*.loss_metric
+*.learning_rate
+__pycache__
+mlruns
+FL4
