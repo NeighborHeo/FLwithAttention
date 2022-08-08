@@ -7,6 +7,7 @@ import time
 from random import random
 import numpy as np
 import requests
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 import tensorflow as tf
 from tensorflow.keras import models, layers, optimizers, initializers, losses, metrics, regularizers
 from sklearn import metrics
@@ -24,22 +25,13 @@ from tensorflow.keras.utils import to_categorical
 '''
     - 데이터 로딩하기
 '''
-
-
-# global edge
-# functions = {-1: load_central,
-#              0: load_edge,
-#              1: load_edge,
-#              2: load_edge,
-#              3: load_edge}
-
-# func = functions[edge]
-# func(edge)
-
-# client_name = "edge_{}".format(edge)
+import pathlib
+# current_dir = pathlib.Path.cwd()
+current_dir = pathlib.Path(os.path.dirname(os.path.realpath(__file__)))
+parent_dir = current_dir.parent
 
 def load_config():
-    with open('./{}'.format("data_config.json"), encoding='UTF8') as file:
+    with open(current_dir.joinpath("data_config.json"), encoding='UTF8') as file:
         cfg = json.load(file)
     return cfg
         
@@ -50,20 +42,8 @@ target_col = cfg['target_col']
 icu_units = list(cfg['icu_units'].values())
 
 # In[]:
-# file_path = parent_dir.joinpath('data', 'data_drop_outlier_df.feather')
-# data_df = pd.read_feather(file_path)
 
-# for icu in cfg['label_encoder']:
-#     n_icu = cfg['label_encoder'][icu]
-#     print(icu, n_icu)
-#     file_path = parent_dir.joinpath('data', 'eicu')
-#     pathlib.Path.mkdir(file_path, mode=0o777, parents=True, exist_ok=True)
-#     icu_df = data_df[data_df['icu']==n_icu].reset_index(drop=True)
-#     icu_df = icu_df[selected_cols + target_col]
-#     icu_df.to_feather(file_path.joinpath(f'{icu}.feather'))
-
-
-def _load_dataset_central():
+def load_dataset_central():
     train_data_df = pd.DataFrame()
     for icu in icu_units[:-1]:
         icu_df = pd.read_feather(parent_dir.joinpath('data', 'eicu', f'{icu}.feather'))
@@ -71,7 +51,7 @@ def _load_dataset_central():
     valid_data_df = pd.read_feather(parent_dir.joinpath('data', 'eicu', f'{icu_units[-1]}.feather'))
     return train_data_df, valid_data_df
 
-def _load_dataset_edge(n):
+def load_dataset_edge(n):
     train_data_df = pd.read_feather(parent_dir.joinpath('data', 'eicu', f'{icu_units[n]}.feather'))
     valid_data_df = pd.read_feather(parent_dir.joinpath('data', 'eicu', f'{icu_units[-1]}.feather'))
     return train_data_df, valid_data_df
@@ -82,41 +62,21 @@ def init_client_name(n):
         client_name = "central"
     else :
         client_name = "edge_{}".format(n)
-
-def initPath(client_name):
-    global current_dir, parent_dir, result_dir
-    import pathlib
-    current_dir = pathlib.Path.cwd()
-    parent_dir = current_dir.parent
+    global result_dir
     result_dir = pathlib.Path.joinpath(parent_dir, 'result', 'eicu', client_name)
     pathlib.Path.mkdir(result_dir, mode=0o777, parents=True, exist_ok=True)
 
 def load_dataset(n):
     if (n==-1):
-        train_data_df, valid_data_df = _load_dataset_central()
+        train_data_df, valid_data_df = load_dataset_central()
     else :
-        train_data_df, valid_data_df = _load_dataset_edge(n)
+        train_data_df, valid_data_df = load_dataset_edge(n)
 
     X_data, y_data = train_data_df[selected_cols], train_data_df['death']
     X_valid, y_valid = valid_data_df[selected_cols], valid_data_df['death']
     X_train, X_test, y_train, y_test = train_test_split(X_data, y_data, test_size=0.3, stratify=y_data, random_state=0)
     
     return X_train, X_test, X_valid, y_train, y_test, y_valid
-
-# X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train, test_size=0.25, stratify=y_train, random_state=0)
-
-# dataset = {"X_train":X_train, "y_train":y_train, 'X_valid':X_valid, 'y_valid':y_valid,'X_test':X_test, 'y_test':y_test}
-
-# with open('./dataset.pkl','wb') as f:
-#         pickle.dump(dataset, f)
-
-# common만 선정
-# X_train, X_valid, X_test = X_train[feature_book['common_features']], X_valid[feature_book['common_features']], X_test[feature_book['common_features']]
-# y_train, y_valid, y_test = to_categorical(y_train), to_categorical(y_valid), to_categorical(y_test)
-
-#%%
-
-
 #%%
 
 '''
@@ -343,26 +303,7 @@ def single_train():
     weights = getClassWeight(y_train)
     model.fit(X_train, y_train, epochs=1000, batch_size=32, verbose=1, validation_data=[X_test, y_test], callbacks=[early_stopping], class_weight=weights)
     y_pred = model.predict(X_valid)
-    # answer_vec = to_categorical(y_test)
-    # auroc_ovr = metrics.roc_auc_score(answer_vec, y_pred, multi_class='ovr')
-    # auroc_ovo = metrics.roc_auc_score(answer_vec, y_pred, multi_class='ovo')
-    y_pred = np.argmax(y_pred, axis=1)
-    # auroc = metrics.roc_auc_score(y_test, y_pred)
-    # cm = confusion_matrix(y_test, y_pred)
-    # acc = accuracy_score(y_test, y_pred)
-    # f1 = f1_score(y_test, y_pred, average=None)
-    # f2 = f1_score(y_test, y_pred, average='micro')
-    # f3 = f1_score(y_test, y_pred, average='macro')
-    # f4 = f1_score(y_test, y_pred, average='weighted')
-    # print("acc : {}".format(acc))
-    # # print("auroc ovr : {}".format(auroc_ovr))
-    # # print("auroc ovo : {}".format(auroc_ovo))
-    # print("auroc : {}".format(auroc))
-    # print("f1 : {}".format(f1))
-    # print("f2 : {}".format(f2))
-    # print("f3 : {}".format(f3))
-    # print("f4 : {}".format(f4))
-    # print("cm : ", cm)
+    y_pred = np.argmax(y_pred, axis=1)    
     performance = model_performance(y_valid, y_pred, y_pred)
     save_model_performance(performance)
     shapley_value_result = get_shapley_value(model)
@@ -379,13 +320,10 @@ def save_model_performance(result):
 
 def model_performance(y_true, y_pred, y_proba):
     from sklearn.metrics import confusion_matrix, roc_auc_score, matthews_corrcoef
-
     cm = confusion_matrix(y_true, y_pred, labels=[1,0])
-    
     roc_auc = roc_auc_score(y_true, y_proba)
     mcc = matthews_corrcoef(y_true, y_pred)
     TP, FP, FN, TN = cm[0][0], cm[1][0], cm[0][1], cm[1][1]
-    
     result = {}
     result['TP'] = TP
     result['FP'] = FP
@@ -403,37 +341,8 @@ def model_performance(y_true, y_pred, y_proba):
     result['f1score'] = 2*result['precision']*result['recall']/(result['precision']+result['recall'])
     result['roc_auc'] = roc_auc
     result['mcc'] = mcc
-    
     print(result)
     return result
-    out = open('{}/model_performance_evaluation.txt'.format(output_path),'a')
-    out.write(str(outcome_name) + '///')
-    out.write(str(TP) + '///')
-    out.write(str(TN) + '///')
-    out.write(str(FP) + '///')
-    out.write(str(FN) + '///')
-    out.write('{:.3}'.format(result['precision']) + '///')
-    out.write('{:.3}'.format(result['specificity']) + '///')
-    out.write('{:.3}'.format(result['accuracy']) + '///')
-    out.write('{:.3}'.format(result['recall'])+ '///')
-    out.write('{:.3}'.format(result['f1score'])+ '///')
-    out.write('{:.3}'.format(result['roc_auc'])+ '///')
-    out.write('{:.3}'.format(result['mcc']))
-    out.write('\n')        
-    out.close()
-    
-    print("TP", TP) 
-    print("TN", TN)
-    print("FP", FP)
-    print("FN", FN)
-    print("precision", '{:.3%}'.format(result['precision']))
-    print("specificity", '{:.3%}'.format(result['specificity']))
-    print("accuracy", '{:.3%}'.format(result['accuracy']))
-    print("recall", '{:.3%}'.format(result['recall']))
-    print("f1_score", '{:.3%}'.format(result['f1score']))    
-    print("roc_auc", '{:.3%}'.format(result['roc_auc']))    
-    print("mcc", '{:.3%}'.format(result['mcc']))    
-
     
 # %%
 if __name__ == "__main__":
@@ -451,9 +360,7 @@ if __name__ == "__main__":
     bLocal = bool(args.local)
     edge = int(args.edge)
     
-    
     init_client_name(edge)
-    initPath(client_name)
     X_train, X_test, X_valid, y_train, y_test, y_valid = load_dataset(edge)
     
     if bLocal:
