@@ -2,6 +2,8 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
+sys.path.append('..')
+from _utils.utils import *
 
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'FL_Server.settings')
@@ -17,4 +19,5 @@ def main():
 
 
 if __name__ == '__main__':
+    createbackupfolder()
     main()

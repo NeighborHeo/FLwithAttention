@@ -2,23 +2,26 @@
 import argparse
 import json
 import os
+import sys
+import pickle
 import threading
 import time
 from random import random
 import numpy as np
+import pandas as pd
+import numpy_encoder
 import requests
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 import tensorflow as tf
 from tensorflow.keras import models, layers, optimizers, initializers, losses, metrics, regularizers
+from tensorflow.keras.utils import to_categorical
+from tensorflow.python.keras.callbacks import EarlyStopping
 from sklearn import metrics
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
-import numpy_encoder
-import yaml
 from sklearn.model_selection import train_test_split
-import pandas as pd
-import sys
-import pickle
-from tensorflow.keras.utils import to_categorical
+
+sys.path.append('..')
+from _utils.utils import *
 
 # tf.random.set_random_seed(42)  # tensorflow seed fixing
 # %%
@@ -31,17 +34,25 @@ current_dir = pathlib.Path(os.path.dirname(os.path.realpath(__file__)))
 parent_dir = current_dir.parent
 
 def load_config():
-    with open(current_dir.joinpath("data_config.json"), encoding='UTF8') as file:
+    with open(parent_dir.joinpath("config.json"), encoding='UTF8') as file:
         cfg = json.load(file)
     return cfg
         
 cfg = load_config()
-drop_cols = cfg['drop_cols']
 selected_cols = cfg['selected_cols']
 target_col = cfg['target_col']
 icu_units = list(cfg['icu_units'].values())
 
 # In[]:
+def init_client_name(n):
+    global client_name
+    if (n==-1):
+        client_name = "central"
+    else :
+        client_name = "edge_{}".format(n)
+    global result_dir
+    result_dir = pathlib.Path.joinpath(parent_dir, 'result', 'eicu', client_name)
+    pathlib.Path.mkdir(result_dir, mode=0o777, parents=True, exist_ok=True)
 
 def load_dataset_central():
     train_data_df = pd.DataFrame()
@@ -56,29 +67,13 @@ def load_dataset_edge(n):
     valid_data_df = pd.read_feather(parent_dir.joinpath('data', 'eicu', f'{icu_units[-1]}.feather'))
     return train_data_df, valid_data_df
 
-def init_client_name(n):
-    global client_name
-    if (n==-1):
-        client_name = "central"
-    else :
-        client_name = "edge_{}".format(n)
-    global result_dir
-    result_dir = pathlib.Path.joinpath(parent_dir, 'result', 'eicu', client_name)
-    pathlib.Path.mkdir(result_dir, mode=0o777, parents=True, exist_ok=True)
-
 def load_dataset(n):
     if (n==-1):
         train_data_df, valid_data_df = load_dataset_central()
     else :
         train_data_df, valid_data_df = load_dataset_edge(n)
-
-    X_data, y_data = train_data_df[selected_cols], train_data_df['death']
-    X_valid, y_valid = valid_data_df[selected_cols], valid_data_df['death']
-    X_train, X_test, y_train, y_test = train_test_split(X_data, y_data, test_size=0.3, stratify=y_data, random_state=0)
-    
-    return X_train, X_test, X_valid, y_train, y_test, y_valid
+    return train_data_df, valid_data_df
 #%%
-
 '''
     build ann model
 '''
@@ -296,7 +291,6 @@ def print_result():
     print("====================")
 
 # %%
-from tensorflow.python.keras.callbacks import EarlyStopping
 def single_train():
     early_stopping = EarlyStopping(patience=5)
     model = build_nn_model()
@@ -361,7 +355,11 @@ if __name__ == "__main__":
     edge = int(args.edge)
     
     init_client_name(edge)
-    X_train, X_test, X_valid, y_train, y_test, y_valid = load_dataset(edge)
+    
+    train_data_df, valid_data_df = load_dataset(edge)
+    X_data, y_data = train_data_df[selected_cols], train_data_df['death']
+    X_valid, y_valid = valid_data_df[selected_cols], valid_data_df['death']
+    X_train, X_test, y_train, y_test = train_test_split(X_data, y_data, test_size=0.3, stratify=y_data, random_state=0)
     
     if bLocal:
         single_train()

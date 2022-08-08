@@ -1,7 +1,0 @@
-{
-    "icu_units" : {"Med-Surg ICU":"MSICU", "CTICU":"CTICU", "SICU":"SICU", "CCU-CTICU":"CCUCTICU", "MICU":"MICU", "Neuro ICU":"NICU", "Cardiac ICU":"CICU", "CSICU":"CSICU"},
-    "label_encoder" : {"MSICU": 5, "CTICU": 3, "SICU": 7, "CCUCTICU": 0, "MICU": 4, "NICU": 6, "CICU": 1, "CSICU": 2},
-    "drop_cols" : ["연구등록번호", "chloride", "calcium", "rbc count", "MCH", "pco2", "pao2", "bp", "dialysis", "apacheapsvarid", "dischargeweight", "weight", "unitstaytype", "sodium", "unitadmitsource", "gender", "ethnicity", "hospitalid", "wardid", "unitvisitnumber", "hospitaladmitsource", "height", "icu", "hospitaldischargeoffset", "hospitaldischargeyear", "WBC x 1000", "hematocrit"],
-    "selected_cols" : ["age", "albumin", "bicarbonate", "bilirubin", "bun", "creatinine", "fio2", "gcs", "glucose", "hct", "heartrate", "hospitaladmitoffset", "intubated", "ph", "platelets x 1000", "potassium", "respiratoryrate", "temperature", "unitdischargeoffset", "urine", "vent", "wbc", "Hgb", "MCHC", "MCV", "RDW"],
-    "target_col" : ["death"]
-}
