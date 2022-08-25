@@ -6,12 +6,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 class FederatedServer:
-    max_count = 3
+    max_count = 7
     global_weight = None
     local_weights = []
+    local_attentions = []
+    # agg_weights = []
     current_count = 0
     current_round = 0
-    total_round = 50
+    total_round = 30
 
     def __init__(self):
         print("Federated init")
@@ -23,6 +25,9 @@ class FederatedServer:
     @classmethod
     def update(cls, local_weight):
         weight_list = []
+        local_attention = np.array(local_weight.pop(0))
+        cls.local_attentions.append(local_attention)
+
         for i in range(len(local_weight)):
             temp = np.array(local_weight[i])
             weight_list.append(temp)
@@ -38,6 +43,37 @@ class FederatedServer:
             logger.info("current round : {}".format(cls.current_round))
             logger.info("----------------------------------------")
 
+    """
+        전체 client로부터 전달받은 weight들을 average함        
+    """
+    @classmethod
+    def feature_weighted_average(cls):
+        def cos_sim(A, B):
+            from numpy import dot
+            from numpy.linalg import norm
+            return dot(A, B)/(norm(A)*norm(B))
+        
+        mean_attention = np.average(cls.local_attentions, axis=0)
+        agg_weights = []
+        for local_attention in cls.local_attentions:
+            agg_weights.append(cos_sim(mean_attention, local_attention))
+        
+        n_edges = len(cls.local_weights)
+        n_layers = len(cls.local_weights[0]) if n_edges > 0 else 0
+
+        global_weight = []
+        for n_layer in range(n_layers):
+            layer_weight = []
+            for n_edge in range(n_edges):
+                layer_weight.append(np.array(cls.local_weights[n_edge][n_layer]))
+                # print(n_edge, n_layer)
+            layer_weight = np.average(layer_weight, axis=0, weights=agg_weights)
+            global_weight.append(layer_weight)
+    
+        cls.global_weight = global_weight
+        cls.local_weights = []
+        cls.local_attentions = []
+        
     """
         전체 client로부터 전달받은 weight들을 average함        
     """
@@ -67,7 +103,8 @@ class FederatedServer:
         # 새로운 global weight
         cls.global_weight = np.divide(temp_list, cls.max_count)
         cls.local_weights = []
-
+        cls.local_attentions = []
+        
     @classmethod
     def get_avg(cls):
         """ 현재 global weight 조회"""
@@ -96,8 +133,10 @@ class FederatedServer:
     @classmethod
     def reset_parm(cls):
         """ FL 환경 설정 변수 초기화 (admin)"""
-        cls.max_count = 3
+        cls.max_count = 7
         cls.global_weight = None
         cls.local_weights = []
+        cls.local_attentions = []
+        # cls.agg_weights = []    # edge weight 
         cls.current_count = 0
         cls.current_round = 0

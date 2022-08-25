@@ -50,9 +50,17 @@ def init_client_name(n):
         client_name = "central"
     else :
         client_name = "edge_{}".format(n)
-    global result_dir
-    result_dir = pathlib.Path.joinpath(parent_dir, 'result', 'eicu', client_name)
-    pathlib.Path.mkdir(result_dir, mode=0o777, parents=True, exist_ok=True)
+    return client_name
+        
+def getGlobalResultPath():
+    global_result_path = pathlib.Path.joinpath(parent_dir, 'result', 'eicu', 'global')
+    pathlib.Path.mkdir(global_result_path, mode=0o777, parents=True, exist_ok=True)
+    return global_result_path
+
+def getLocalResultPath():
+    local_result_path = pathlib.Path.joinpath(parent_dir, 'result', 'eicu', client_name)
+    pathlib.Path.mkdir(local_result_path, mode=0o777, parents=True, exist_ok=True)
+    return local_result_path
 
 def load_dataset_central():
     train_data_df = pd.DataFrame()
@@ -103,7 +111,7 @@ def build_nn_model(
                                 activation='softmax',
                                 name='classifier')(dense)
     model = models.Model(input_layer, output_layer)
-    model.compile(optimizer=tf.keras.optimizers.Adam(),
+    model.compile(optimizer=tf.keras.optimizers.Adam(lr=0.0001),
                          loss=tf.keras.losses.SparseCategoricalCrossentropy(),
                          metrics=['accuracy'])
     return model
@@ -114,7 +122,7 @@ def build_nn_model(
 '''
 def request_global_weight():
     print("request_global_weight start")
-    result = requests.get(ip_address)
+    result = requests.get(url_weight)
     result_data = result.json()
     global_weight = None
     if result_data is not None:
@@ -129,19 +137,29 @@ def request_global_weight():
 '''
     update local weight to server
 '''
-def update_local_weight(local_weight = []):
+def update_local_weight(importance_vector, local_weight = []):
     print("update local weight start ")
+    local_weight.insert(0, importance_vector)
     local_weight_to_json = json.dumps(local_weight, cls=numpy_encoder.NumpyEncoder)
-    requests.put(ip_address, data=local_weight_to_json)
+    requests.put(url_weight, data=local_weight_to_json)
     print("update local weight end")
-    
+
+# def update_local_attention(local_attention = []):
+#     print(client_name, local_attention)
+#     print("update local attention start ")
+#     local_attention_to_json = json.dumps(local_attention, cls=numpy_encoder.NumpyEncoder)
+#     requests.put(url_attention, data=local_attention_to_json)
+#     print("update local attention end")
+
 # %%
 def getClassWeight(y_data):
     from sklearn.utils import class_weight
+    import math
     weights = class_weight.compute_class_weight(class_weight = 'balanced',
                                             classes = np.unique(y_data),
                                             y = y_data)
-    weights = {i : weights[i] for i in range(2)}
+    weights = {i : math.sqrt(weights[i]) for i in range(2)}
+    print(weights)
     return weights
 
 def train_local(global_weight = None):
@@ -153,8 +171,12 @@ def train_local(global_weight = None):
         global_weight = np.array(global_weight)
         model.set_weights(global_weight)
     
-    weights = getClassWeight(y_test)
-    model.fit(X_train, y_train, epochs=200, batch_size=128, class_weight=weights)
+    # weights = getClassWeight(y_test)
+    # model.fit(X_train, y_train, epochs=200, batch_size=128, class_weight=weights)
+    
+    early_stopping = EarlyStopping(patience=5)
+    weights = getClassWeight(y_train)
+    model.fit(X_train, y_train, epochs=200, batch_size=128, verbose=1, validation_data=[X_test, y_test], callbacks=[early_stopping], class_weight=weights)
     
     print("train local end")
     return model.get_weights()
@@ -171,37 +193,49 @@ def delay_compare_weight():
         '''
 # %%
 def request_current_round():
-    result = requests.get(request_round)
+    result = requests.get(url_request_round)
     result_data = result.json()
     return result_data
 
 #%%
 def request_total_round():
-    result = requests.get(request_total_round_url)
+    result = requests.get(url_request_total_round)
     print("this is the total round : ",result.json())
     result_data =  result.json()
     return result_data
 
 # %%
-def validation(global_lound = 0, local_weight = []):
+def local_validation(local_weight):
+    result_dir = getLocalResultPath()
+    return validation(result_dir, local_weight)
+
+def global_validation(global_weight):
+    # The evaluation of the global model is done only in client 1.
+    if edge != 1: 
+        return
+    result_dir = getGlobalResultPath()
+    return validation(result_dir, global_weight)
+
+def validation(result_dir, weight = []):
     print("validation start")
-    if local_weight is not None:
-        model = build_nn_model()
-        model.set_weights(local_weight)
-        y_pred = model.predict(X_valid)
-        
-        answer_vec = to_categorical(y_valid)
-        answer = y_valid
-        
-        auroc_ovr = metrics.roc_auc_score(answer_vec, y_pred, multi_class='ovr')
-        auroc_ovo = metrics.roc_auc_score(answer_vec, y_pred, multi_class='ovo')
-        y_pred = np.argmax(y_pred, axis=1)
-        performance_result = model_performance(y_valid, y_pred, y_pred)
-        save_model_performance(performance_result)
-        # save_result(model, global_lound, global_acc=acc, f1_score=f3, auroc=auroc_ovo)
-        shapley_value_result = get_shapley_value(model)
-        save_shapley_value(shapley_value_result)
-        print("validation end")
+    if weight is None:
+        print("weight is None")
+        return None
+    model = build_nn_model()
+    model.set_weights(weight)
+    y_pred = model.predict(X_valid)
+    answer_vec = to_categorical(y_valid)
+    answer = y_valid
+    auroc_ovr = metrics.roc_auc_score(answer_vec, y_pred, multi_class='ovr')
+    auroc_ovo = metrics.roc_auc_score(answer_vec, y_pred, multi_class='ovo')
+    y_pred = np.argmax(y_pred, axis=1)
+    performance_result = model_performance(y_valid, y_pred, y_pred)
+    save_model_performance(result_dir, performance_result)
+    # save_result(model, global_round, global_acc=acc, f1_score=f3, auroc=auroc_ovo)
+    shapley_value_result, importance_vector = get_shapley_value(model)
+    save_shapley_value(result_dir, shapley_value_result)
+    print("validation end")
+    return importance_vector
 # %%
 def save_result(model, global_rounds, global_acc, f1_score, auroc):
     test_name=client_name
@@ -233,12 +267,12 @@ def get_shapley_value(model):
     # get just the explanations for the positive class
     shap_values = shap_values[...,1]
     shap.plots.bar(shap_values)
-    vals = np.abs(shap_values.values).mean(0)
+    importance_vector = np.abs(shap_values.values).mean(0)
     feature_names = X_train.columns
-    result = dict(zip(feature_names, vals))
-    return result
+    result = dict(zip(feature_names, importance_vector))
+    return result, importance_vector
 
-def save_shapley_value(result):
+def save_shapley_value(result_dir, result):
     file_path = result_dir.joinpath('feature_importance.feather')
     result_df = pd.DataFrame()
     if file_path.exists() :
@@ -246,6 +280,7 @@ def save_shapley_value(result):
     add_result_df = pd.Series(result).to_frame(name='{}'.format(current_round)).transpose()
     result_df = pd.concat([result_df, add_result_df], axis=0).reset_index(drop=True)
     result_df.to_feather(file_path)
+    
 # %%
 def task():
     print("--------------------")
@@ -272,11 +307,14 @@ def task():
         print("task train")
         # start next round
         global_weight = request_global_weight()
+        global_validation(global_weight)
         local_weight = train_local(global_weight)
-        # validation 0 clinet
-        if input_number == 0 :
-            validation(global_round, global_weight)
-        update_local_weight(local_weight)
+        # # validation 0 clinet
+        # if input_number == 0 :
+        #     importance_vector = local_validation(local_weight)
+        #     update_local_attention(importance_vector)
+        importance_vector = local_validation(local_weight)
+        update_local_weight(importance_vector, local_weight)
         delay_compare_weight()
         current_round += 1
     else:
@@ -291,19 +329,30 @@ def print_result():
     print("====================")
 
 # %%
-def single_train():
+def single_train(result_dir):
     early_stopping = EarlyStopping(patience=5)
     model = build_nn_model()
     weights = getClassWeight(y_train)
-    model.fit(X_train, y_train, epochs=1000, batch_size=32, verbose=1, validation_data=[X_test, y_test], callbacks=[early_stopping], class_weight=weights)
-    y_pred = model.predict(X_valid)
-    y_pred = np.argmax(y_pred, axis=1)    
-    performance = model_performance(y_valid, y_pred, y_pred)
-    save_model_performance(performance)
-    shapley_value_result = get_shapley_value(model)
-    save_shapley_value(shapley_value_result)
+    model.fit(X_train, y_train, epochs=200, batch_size=128, verbose=1, validation_data=[X_test, y_test], callbacks=[early_stopping], class_weight=weights)
+    #model.fit(X_train, y_train, epochs=200, batch_size=128, verbose=1, validation_data=[X_test, y_test], callbacks=[early_stopping])
     
-def save_model_performance(result):
+    local_weight = model.get_weights()
+    importance_vector = local_validation(local_weight)
+    print(len(importance_vector), importance_vector)
+    print(local_weight)
+    # local_weight.insert(0, importance_vector)
+    # with open(getLocalResultPath().joinpath('local_weight2.json'), 'w') as json_file:
+    #     local_weight_to_json = json.dumps(local_weight, cls=numpy_encoder.NumpyEncoder)
+    #     json.dump(local_weight_to_json, json_file)
+    
+    # y_pred = model.predict(X_valid)
+    # y_pred = np.argmax(y_pred, axis=1)    
+    # performance = model_performance(y_valid, y_pred, y_pred)
+    # save_model_performance(result_dir, performance)
+    # shapley_value_result, importance_vector = get_shapley_value(model)
+    # save_shapley_value(result_dir, shapley_value_result)
+    
+def save_model_performance(result_dir, result):
     file_path = result_dir.joinpath('model_performance.feather')
     result_df = pd.DataFrame()
     if file_path.exists() :
@@ -354,15 +403,16 @@ if __name__ == "__main__":
     bLocal = bool(args.local)
     edge = int(args.edge)
     
-    init_client_name(edge)
+    client_name = init_client_name(edge)
     
     train_data_df, valid_data_df = load_dataset(edge)
-    X_data, y_data = train_data_df[selected_cols], train_data_df['death']
-    X_valid, y_valid = valid_data_df[selected_cols], valid_data_df['death']
+    X_data, y_data = train_data_df[selected_cols], train_data_df[target_col]
+    X_valid, y_valid = valid_data_df[selected_cols], valid_data_df[target_col]
     X_train, X_test, y_train, y_test = train_test_split(X_data, y_data, test_size=0.3, stratify=y_data, random_state=0)
     
     if bLocal:
-        single_train()
+        result_dir = getLocalResultPath()
+        single_train(result_dir)
 
     else :
         np.random.seed(42)
@@ -374,9 +424,10 @@ if __name__ == "__main__":
         # split_train_images, split_train_labels = split_data(input_number)
         
         base_url = "http://127.0.0.1:8000/"
-        ip_address = "http://127.0.0.1:8000/weight"
-        request_round = "http://127.0.0.1:8000/round"
-        request_total_round_url = "http://127.0.0.1:8000/total_round"
+        url_weight = "http://127.0.0.1:8000/weight"
+        # url_attention = "http://127.0.0.1:8000/attention"
+        url_request_round = "http://127.0.0.1:8000/round"
+        url_request_total_round = "http://127.0.0.1:8000/total_round"
         
         start_time = time.time()
         task()

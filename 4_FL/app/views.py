@@ -39,7 +39,7 @@ def weight(request):
         return HttpResponse(global_weight_to_json, status.HTTP_200_OK)
 
     elif request.method == 'PUT':
-        #print("request PUT weight")
+        print("request PUT weight")
         json_data = JSONParser().parse(request)
         FederatedServer.update(json_data)
         return HttpResponse("Request PUT OK", status.HTTP_200_OK)
@@ -47,6 +47,23 @@ def weight(request):
     else :
         #print("request OTHER weight")
         return HttpResponse("Request OK", status.HTTP_200_OK)
+    
+# @api_view(['GET', 'PUT'])
+# def attention(request):
+#     if request.method == 'GET':
+#         global_attention = FederatedServer.get_avg()
+#         global_attention_to_json = json.dumps(global_attention, cls=numpy_encoder.NumpyEncoder)
+#         return HttpResponse(global_attention_to_json, status.HTTP_200_OK)
+
+#     elif request.method == 'PUT':
+#         #print("request PUT attention")
+#         json_data = JSONParser().parse(request)
+#         FederatedServer.update(json_data)
+#         return HttpResponse("Request PUT OK", status.HTTP_200_OK)
+
+#     else :
+#         #print("request OTHER attention")
+#         return HttpResponse("Request OK", status.HTTP_200_OK)
 
 @api_view(['POST'])
 def reset(request):
