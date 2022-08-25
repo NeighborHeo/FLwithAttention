@@ -1,0 +1,37 @@
+{
+    "dbms": "mysql",
+    "mssql": {
+        "@server": "111.111.111.111",
+        "@user": "user",
+        "@password": "password",
+        "@port": 5432,
+        "@database": "postgres",
+        "@cdm_database_schema": "CDM.dbo",
+        "@person_database_schema": "temp_moa.dbo"
+    },
+    "postgresql": {
+        "@server": "111.111.111.111",
+        "@user": "user",
+        "@password": "password",
+        "@port": 5432,
+        "@database": "postgres",
+        "@cdm_database_schema": "CDM.dbo",
+        "@person_database_schema": "temp_moa.dbo"
+    },
+    "mysql": {
+        "@server": "111.111.111.111",
+        "@user": "user",
+        "@password": "password",
+        "@port": 5432,
+        "@database": "postgres",
+        "@cdm_database_schema": "CDM.dbo",
+        "@person_database_schema": "temp_moa.dbo"
+    },
+    "icu_units" : {"Med-Surg ICU":"MSICU", "CTICU":"CTICU", "SICU":"SICU", "CCU-CTICU":"CCUCTICU", "MICU":"MICU", "Neuro ICU":"NICU", "Cardiac ICU":"CICU", "CSICU":"CSICU"},
+    "label_encoder" : {"MSICU": 5, "CTICU": 3, "SICU": 7, "CCUCTICU": 0, "MICU": 4, "NICU": 6, "CICU": 1, "CSICU": 2},
+    "drop_cols" : ["연구등록번호", "chloride", "calcium", "rbc count", "MCH", "pco2", "pao2", "bp", "dialysis", "apacheapsvarid", "dischargeweight", "weight", "unitstaytype", "sodium", "unitadmitsource", "gender", "ethnicity", "hospitalid", "wardid", "unitvisitnumber", "hospitaladmitsource", "height", "icu", "hospitaldischargeoffset", "hospitaldischargeyear", "WBC x 1000", "hematocrit"],
+    "selected_cols_" : ["age", "albumin", "bicarbonate", "bilirubin", "bun", "creatinine", "fio2", "gcs", "glucose", "hct", "heartrate", "hospitaladmitoffset", "intubated", "ph", "platelets x 1000", "potassium", "respiratoryrate", "temperature", "unitdischargeoffset", "urine", "vent", "wbc", "Hgb", "MCHC", "MCV", "RDW"],
+    "selected_cols" : ["respiratoryrate", "albumin", "vent", "gcs", "dischargeweight", "ph", "meanbp", "bilirubin", "heartrate", "age", "admissionheight", "pao2", "bun", "creatinine", "wardid", "pco2", "intubated"],
+    "target_col_" : ["death"],
+    "target_col" : "hospitaldischargestatus"
+}
